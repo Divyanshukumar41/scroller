@@ -1,3 +1,4 @@
+
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
@@ -12,34 +13,87 @@ const app = express();
 
 app.set("trust proxy", 1);
 
-const allowedOrigins = (process.env.CLIENT_URL || "")
+// =========================================================
+// CORS
+// =========================================================
+
+// const defaultOrigins = [
+//   "http://localhost:5173",
+//   "http://localhost:4173",
+// ];
+
+const envOrigins = (process.env.CLIENT_URL || "")
   .split(",")
-  .map((origin) => origin.trim().replace(/\/+$/, ""))
+  .map((origin) => origin.trim())
   .filter(Boolean);
 
-const fallbackOrigins = [
-  "http://localhost:5173",
-  "http://localhost:4173",
-];
+const corsOrigins = [
+  // ...defaultOrigins,
+  ...envOrigins,
+]
+  .map((origin) => origin.replace(/\/+$/, ""))
+  .filter((origin, index, array) => {
+    return array.indexOf(origin) === index;
+  });
 
-const corsOrigins = allowedOrigins.length ? allowedOrigins : fallbackOrigins;
-
-app.use(helmet());
+console.log("Allowed CORS origins:", corsOrigins);
 
 app.use(
   cors({
-    origin(origin, callback) {
-      // Allow server-to-server tools and same-origin requests with no Origin header.
-      if (!origin) return callback(null, true);
+    origin: (origin, callback) => {
+      // Allow requests without Origin
+      // (Postman, server-to-server requests, etc.)
+      if (!origin) {
+        return callback(null, true);
+      }
+
       const cleanOrigin = origin.replace(/\/+$/, "");
-      if (corsOrigins.includes(cleanOrigin)) return callback(null, true);
+
+      if (corsOrigins.includes(cleanOrigin)) {
+        return callback(null, true);
+      }
+
+      console.log("❌ CORS blocked:", origin);
+
       return callback(new Error("CORS origin not allowed"));
     },
+
     credentials: true,
+
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+    ],
   }),
 );
 
+// =========================================================
+// SECURITY
+// =========================================================
+
+app.use(helmet());
+
+// =========================================================
+// BODY PARSER
+// =========================================================
+
 app.use(express.json({ limit: "100kb" }));
+
+app.use(express.urlencoded({ extended: true }));
+
+// =========================================================
+// RATE LIMIT
+// =========================================================
 
 app.use(
   rateLimit({
@@ -50,6 +104,10 @@ app.use(
   }),
 );
 
+// =========================================================
+// HEALTH / ROOT
+// =========================================================
+
 app.get("/", (req, res) => {
   res.json({
     success: true,
@@ -59,12 +117,25 @@ app.get("/", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
-  res.json({ success: true, status: "ok" });
+  res.json({
+    success: true,
+    status: "ok",
+  });
 });
 
+// =========================================================
+// ROUTES
+// =========================================================
+
 app.use("/api/auth", authRoutes);
+
 app.use("/api/users", userRoutes);
+
 app.use("/api", chatRoutes);
+
+// =========================================================
+// 404
+// =========================================================
 
 app.use((req, res) => {
   res.status(404).json({
@@ -73,5 +144,9 @@ app.use((req, res) => {
     path: req.originalUrl,
   });
 });
+
+// =========================================================
+// EXPORT
+// =========================================================
 
 export default app;
