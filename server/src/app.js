@@ -1,4 +1,3 @@
-
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
@@ -38,44 +37,7 @@ const corsOrigins = [
 
 console.log("Allowed CORS origins:", corsOrigins);
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests without Origin
-      // (Postman, server-to-server requests, etc.)
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      const cleanOrigin = origin.replace(/\/+$/, "");
-
-      if (corsOrigins.includes(cleanOrigin)) {
-        return callback(null, true);
-      }
-
-      console.log("❌ CORS blocked:", origin);
-
-      return callback(new Error("CORS origin not allowed"));
-    },
-
-    credentials: true,
-
-    methods: [
-      "GET",
-      "POST",
-      "PUT",
-      "PATCH",
-      "DELETE",
-      "OPTIONS",
-    ],
-
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Requested-With",
-    ],
-  }),
-);
+app.use(cors());
 
 // =========================================================
 // SECURITY
