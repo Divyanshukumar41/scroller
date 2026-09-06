@@ -8,6 +8,7 @@ import { connectDB } from "./config/db.js";
 import Conversation from "./models/Conversation.js";
 import Message from "./models/Message.js";
 import User from "./models/User.js";
+import cors from "cors";
 
 /* =========================================================
    SOCKET.IO IS USED FOR LOCAL / NON-SERVERLESS DEPLOYMENTS.
@@ -15,7 +16,7 @@ import User from "./models/User.js";
 ========================================================= */
 
 const server = http.createServer(app);
-
+app.use(cors());
 const allowedOrigins = (process.env.CLIENT_URL || "")
   .split(",")
   .map((origin) => origin.trim().replace(/\/+$/, ""))
@@ -99,7 +100,9 @@ io.on("connection", async (socket) => {
 
   socket.on("typing:start", ({ conversationId }) => {
     if (!conversationId) return;
-    socket.to(`conversation:${conversationId}`).emit("typing:start", { userId });
+    socket
+      .to(`conversation:${conversationId}`)
+      .emit("typing:start", { userId });
   });
 
   socket.on("typing:stop", ({ conversationId }) => {
@@ -109,10 +112,17 @@ io.on("connection", async (socket) => {
 
   socket.on(
     "message:send",
-    async ({ conversationId, receiverId, text, message_type = "text", localId }, ack) => {
+    async (
+      { conversationId, receiverId, text, message_type = "text", localId },
+      ack,
+    ) => {
       try {
         if (!conversationId || !receiverId) {
-          return ack?.({ success: false, message: "Invalid conversation", localId });
+          return ack?.({
+            success: false,
+            message: "Invalid conversation",
+            localId,
+          });
         }
 
         if (typeof text !== "string" || !text.trim() || text.length > 5000) {
@@ -120,7 +130,11 @@ io.on("connection", async (socket) => {
         }
 
         if (String(userId) === String(receiverId)) {
-          return ack?.({ success: false, message: "Cannot send message to yourself", localId });
+          return ack?.({
+            success: false,
+            message: "Cannot send message to yourself",
+            localId,
+          });
         }
 
         const conversation = await Conversation.findOne({
@@ -129,7 +143,11 @@ io.on("connection", async (socket) => {
         });
 
         if (!conversation) {
-          return ack?.({ success: false, message: "Conversation not found", localId });
+          return ack?.({
+            success: false,
+            message: "Conversation not found",
+            localId,
+          });
         }
 
         const message = await Message.create({
@@ -205,9 +223,10 @@ io.on("connection", async (socket) => {
     }
   });
 });
+import { setServers } from "node:dns/promises";
 
+setServers(["1.1.1.1", "8.8.8.8"]);
 const port = Number(process.env.PORT || 8080);
-
 connectDB()
   .then(() => {
     server.listen(port, () => {
