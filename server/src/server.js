@@ -8,7 +8,7 @@ import { connectDB } from "./config/db.js";
 import Conversation from "./models/Conversation.js";
 import Message from "./models/Message.js";
 import User from "./models/User.js";
-import cors from "cors";
+
 
 /* =========================================================
    SOCKET.IO IS USED FOR LOCAL / NON-SERVERLESS DEPLOYMENTS.
@@ -16,7 +16,6 @@ import cors from "cors";
 ========================================================= */
 
 const server = http.createServer(app);
-app.use(cors());
 const allowedOrigins = (process.env.CLIENT_URL || "")
   .split(",")
   .map((origin) => origin.trim().replace(/\/+$/, ""))

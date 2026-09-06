@@ -4,10 +4,12 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
-
+import authRoutes from "./routes/auth.js";
+import userRoutes from "./routes/users.js";
+import chatRoutes from "./routes/chat.js";
 
 const app = express();
-
+app.use(cors())
 app.set("trust proxy", 1);
 
 const allowedOrigins = (process.env.CLIENT_URL || "")
@@ -15,7 +17,10 @@ const allowedOrigins = (process.env.CLIENT_URL || "")
   .map((origin) => origin.trim().replace(/\/+$/, ""))
   .filter(Boolean);
 
-const fallbackOrigins = ["http://localhost:5173", "http://localhost:4173"];
+const fallbackOrigins = [
+  "http://localhost:5173",
+  "http://localhost:4173",
+];
 
 const corsOrigins = allowedOrigins.length ? allowedOrigins : fallbackOrigins;
 
@@ -36,9 +41,6 @@ app.use(
 
 app.use(express.json({ limit: "100kb" }));
 
-import authRoutes from "./routes/auth.js";
-import userRoutes from "./routes/users.js";
-import chatRoutes from "./routes/chat.js";
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
