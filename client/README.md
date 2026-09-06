@@ -1,4 +1,4 @@
-# ChatFlow Frontend
+# Scroller Frontend
 
 Responsive React + Tailwind CSS chat UI with:
 - Mobile-first chat layout

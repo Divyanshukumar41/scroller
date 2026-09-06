@@ -81,7 +81,7 @@ export function AuthShell({ title, subtitle, children }) {
         <div className="grid w-full overflow-hidden auth-panel-enter rounded-[2rem] border border-white/10 bg-white/[0.04] shadow-2xl shadow-black/30 lg:grid-cols-[1.05fr_.95fr]">
           <div className="hidden min-h-[680px] flex-col justify-between bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-10 lg:flex">
             <div className="flex items-center gap-3 text-xl font-black">
-              <MessageCircle /> ChatFlow
+              <MessageCircle /> Scroller
             </div>
             <div>
               <div className="mb-5 inline-flex rounded-full bg-white/15 px-4 py-2 text-sm backdrop-blur">
@@ -102,7 +102,7 @@ export function AuthShell({ title, subtitle, children }) {
           <div className="flex min-h-[680px] items-center bg-slate-900 p-6 sm:p-10">
             <div className="mx-auto w-full max-w-md">
               <div className="mb-8 flex items-center gap-3 font-black lg:hidden">
-                <MessageCircle className="text-indigo-400" /> ChatFlow
+                <MessageCircle className="text-indigo-400" /> Scroller
               </div>
               <h2 className="text-3xl font-black">{title}</h2>
               <p className="mt-2 mb-8 text-sm text-slate-400">{subtitle}</p>

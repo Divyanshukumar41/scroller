@@ -19,7 +19,7 @@ button { cursor:pointer; }
 ::-webkit-scrollbar { width:7px; height:7px; }
 ::-webkit-scrollbar-thumb { background:#334155; border-radius:99px; }
 @media (max-width:767px) { .min-h-\\[680px\\] { min-height:auto; } }
-/* ChatFlow motion system */
+/* Scroller motion system */
 .chat-shell { isolation:isolate; }
 .ambient { position:absolute; pointer-events:none; border-radius:999px; filter:blur(70px); opacity:.16; animation:ambient-drift 12s ease-in-out infinite alternate; }
 .ambient-one { width:360px; height:360px; background:#6366f1; top:-140px; right:12%; }
