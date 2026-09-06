@@ -4,59 +4,41 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
-import authRoutes from "./routes/auth.js";
-import userRoutes from "./routes/users.js";
-import chatRoutes from "./routes/chat.js";
+
 
 const app = express();
 
 app.set("trust proxy", 1);
 
-// =========================================================
-// CORS
-// =========================================================
-
-// const defaultOrigins = [
-//   "http://localhost:5173",
-//   "http://localhost:4173",
-// ];
-
-const envOrigins = (process.env.CLIENT_URL || "")
+const allowedOrigins = (process.env.CLIENT_URL || "")
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/\/+$/, ""))
   .filter(Boolean);
 
-const corsOrigins = [
-  // ...defaultOrigins,
-  ...envOrigins,
-]
-  .map((origin) => origin.replace(/\/+$/, ""))
-  .filter((origin, index, array) => {
-    return array.indexOf(origin) === index;
-  });
+const fallbackOrigins = ["http://localhost:5173", "http://localhost:4173"];
 
-console.log("Allowed CORS origins:", corsOrigins);
-
-app.use(cors());
-
-// =========================================================
-// SECURITY
-// =========================================================
+const corsOrigins = allowedOrigins.length ? allowedOrigins : fallbackOrigins;
 
 app.use(helmet());
 
-// =========================================================
-// BODY PARSER
-// =========================================================
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Allow server-to-server tools and same-origin requests with no Origin header.
+      if (!origin) return callback(null, true);
+      const cleanOrigin = origin.replace(/\/+$/, "");
+      if (corsOrigins.includes(cleanOrigin)) return callback(null, true);
+      return callback(new Error("CORS origin not allowed"));
+    },
+    credentials: true,
+  }),
+);
 
 app.use(express.json({ limit: "100kb" }));
 
-app.use(express.urlencoded({ extended: true }));
-
-// =========================================================
-// RATE LIMIT
-// =========================================================
-
+import authRoutes from "./routes/auth.js";
+import userRoutes from "./routes/users.js";
+import chatRoutes from "./routes/chat.js";
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -65,10 +47,6 @@ app.use(
     legacyHeaders: false,
   }),
 );
-
-// =========================================================
-// HEALTH / ROOT
-// =========================================================
 
 app.get("/", (req, res) => {
   res.json({
@@ -79,25 +57,12 @@ app.get("/", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
-  res.json({
-    success: true,
-    status: "ok",
-  });
+  res.json({ success: true, status: "ok" });
 });
 
-// =========================================================
-// ROUTES
-// =========================================================
-
 app.use("/api/auth", authRoutes);
-
 app.use("/api/users", userRoutes);
-
 app.use("/api", chatRoutes);
-
-// =========================================================
-// 404
-// =========================================================
 
 app.use((req, res) => {
   res.status(404).json({
@@ -106,9 +71,5 @@ app.use((req, res) => {
     path: req.originalUrl,
   });
 });
-
-// =========================================================
-// EXPORT
-// =========================================================
 
 export default app;
