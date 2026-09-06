@@ -1,0 +1,271 @@
+@import "tailwindcss";
+
+:root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body, #root { margin:0; min-height:100%; }
+button, input { font: inherit; }
+button { cursor:pointer; }
+.input-wrap { display:flex; align-items:center; gap:.7rem; border:1px solid rgba(255,255,255,.09); background:#020617; border-radius:.9rem; padding:0 .85rem; color:#64748b; transition:.2s; }
+.input-wrap:focus-within { border-color:rgba(99,102,241,.8); box-shadow:0 0 0 4px rgba(99,102,241,.1); }
+.input-wrap input { width:100%; background:transparent; padding:.85rem 0; color:#e2e8f0; outline:none; }
+.input-wrap input::placeholder { color:#475569; }
+.btn-primary { width:100%; display:flex; align-items:center; justify-content:center; gap:.5rem; border:0; border-radius:.9rem; padding:.85rem 1rem; background:#4f46e5; color:#fff; font-weight:800; transition:.2s; }
+.btn-primary:hover:not(:disabled) { background:#6366f1; transform:translateY(-1px); }
+.btn-primary:disabled { opacity:.5; cursor:not-allowed; }
+.auth-link { margin-top:1.5rem; text-align:center; font-size:.875rem; color:#64748b; }
+.auth-link a { color:#a5b4fc; font-weight:700; }
+.icon { display:grid; place-items:center; height:40px; width:40px; border:0; border-radius:.75rem; background:transparent; color:#94a3b8; }
+.icon:hover { background:rgba(255,255,255,.06); color:#fff; }
+::-webkit-scrollbar { width:7px; height:7px; }
+::-webkit-scrollbar-thumb { background:#334155; border-radius:99px; }
+@media (max-width:767px) { .min-h-\\[680px\\] { min-height:auto; } }
+/* ChatFlow motion system */
+.chat-shell { isolation:isolate; }
+.ambient { position:absolute; pointer-events:none; border-radius:999px; filter:blur(70px); opacity:.16; animation:ambient-drift 12s ease-in-out infinite alternate; }
+.ambient-one { width:360px; height:360px; background:#6366f1; top:-140px; right:12%; }
+.ambient-two { width:300px; height:300px; background:#a855f7; bottom:-160px; left:28%; animation-delay:-5s; }
+.brand-orb { display:grid; place-items:center; width:30px; height:30px; border-radius:10px; background:linear-gradient(135deg,#6366f1,#8b5cf6); box-shadow:0 8px 25px rgba(99,102,241,.3); animation:soft-pulse 3s ease-in-out infinite; }
+.glass-button { transition:transform .2s ease, background .2s ease, color .2s ease; }
+.glass-button:hover { transform:translateY(-2px); background:rgba(255,255,255,.07); color:#fff; }
+.online-dot { width:11px; height:11px; display:block; border-radius:50%; border:2px solid #0f172a; background:#34d399; box-shadow:0 0 0 0 rgba(52,211,153,.45); animation:online-pulse 2s infinite; }
+.user-row { position:relative; overflow:hidden; transition:transform .22s ease, background .22s ease, box-shadow .22s ease; }
+.user-row::before { content:""; position:absolute; inset:0; background:linear-gradient(90deg,rgba(99,102,241,.12),transparent); opacity:0; transition:opacity .25s ease; }
+.user-row:hover { transform:translateX(3px); background:rgba(255,255,255,.035); }
+.user-row:hover::before,.user-row.active::before { opacity:1; }
+.user-row.active { background:rgba(99,102,241,.10); box-shadow:inset 2px 0 0 #818cf8; }
+.search-box { transition:border-color .25s ease, box-shadow .25s ease, transform .25s ease; }
+.search-box:focus-within { border-color:rgba(129,140,248,.55); box-shadow:0 0 0 4px rgba(99,102,241,.08); transform:translateY(-1px); }
+.skeleton-row { height:70px; border-radius:16px; background:linear-gradient(90deg,rgba(255,255,255,.025),rgba(255,255,255,.06),rgba(255,255,255,.025)); background-size:200% 100%; animation:shimmer 1.5s infinite; }
+.welcome-orb { background:radial-gradient(circle at 30% 25%,rgba(129,140,248,.22),rgba(99,102,241,.06) 55%,transparent 70%); box-shadow:0 25px 80px rgba(79,70,229,.16), inset 0 0 35px rgba(129,140,248,.06); animation:orb-float 4s ease-in-out infinite; }
+.chat-header { box-shadow:0 10px 40px rgba(0,0,0,.12); }
+.messages-area { background:radial-gradient(circle at 50% 0%,rgba(99,102,241,.08),transparent 32%),linear-gradient(180deg,#020617,#030712); }
+.messages-area::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.035; background-image:radial-gradient(#fff 1px,transparent 1px); background-size:24px 24px; }
+.message-line { animation:message-in .35s cubic-bezier(.2,.8,.2,1) both; }
+.message-bubble { position:relative; transition:transform .2s ease, box-shadow .2s ease; }
+.message-bubble:hover { transform:translateY(-1px); }
+.message-mine { background:linear-gradient(135deg,#4f46e5,#6366f1); box-shadow:0 10px 30px rgba(79,70,229,.18); }
+.message-other { border:1px solid rgba(255,255,255,.07); background:rgba(15,23,42,.9); }
+.composer { box-shadow:0 -12px 35px rgba(0,0,0,.18); }
+.composer-input { transition:border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+.composer-input:focus-within { border-color:rgba(129,140,248,.6); box-shadow:0 0 0 4px rgba(99,102,241,.08); transform:translateY(-1px); }
+.send-button { background:linear-gradient(135deg,#4f46e5,#7c3aed); transition:transform .2s ease, box-shadow .2s ease, filter .2s ease; }
+.send-button:hover:not(:disabled) { transform:translateY(-2px) rotate(-3deg); box-shadow:0 12px 30px rgba(99,102,241,.32); filter:brightness(1.08); }
+.typing-dot { width:5px; height:5px; border-radius:50%; background:#94a3b8; animation:typing-bounce 1s infinite; }
+.typing-dot:nth-child(2){animation-delay:.15s}.typing-dot:nth-child(3){animation-delay:.3s}
+.typing-mini { display:inline-flex; gap:2px; align-items:center; }
+.typing-mini i { width:3px; height:3px; border-radius:50%; background:#818cf8; animation:typing-bounce 1s infinite; }
+.typing-mini i:nth-child(2){animation-delay:.15s}.typing-mini i:nth-child(3){animation-delay:.3s}
+.loader-ring { width:32px; height:32px; border:2px solid rgba(129,140,248,.18); border-top-color:#818cf8; border-radius:50%; animation:spin .8s linear infinite; }
+.menu-item { width:100%; text-align:left; border-radius:10px; padding:9px 10px; color:#94a3b8; font-size:13px; transition:background .18s ease,color .18s ease; }
+.menu-item:hover { background:rgba(255,255,255,.06); color:#fff; }
+.animate-float-in { animation:float-in .55s cubic-bezier(.2,.8,.2,1) both; }
+.animate-menu-in { animation:menu-in .18s ease-out both; }
+.animate-message-in { animation:message-in .3s ease-out both; }
+
+@keyframes ambient-drift { from{transform:translate3d(-20px,0,0) scale(1)} to{transform:translate3d(30px,25px,0) scale(1.08)} }
+@keyframes soft-pulse { 0%,100%{box-shadow:0 8px 25px rgba(99,102,241,.25)} 50%{box-shadow:0 8px 35px rgba(99,102,241,.48)} }
+@keyframes online-pulse { 0%{box-shadow:0 0 0 0 rgba(52,211,153,.45)} 70%{box-shadow:0 0 0 7px rgba(52,211,153,0)} 100%{box-shadow:0 0 0 0 rgba(52,211,153,0)} }
+@keyframes shimmer { from{background-position:200% 0} to{background-position:-200% 0} }
+@keyframes orb-float { 0%,100%{transform:translateY(0) rotate(0)} 50%{transform:translateY(-8px) rotate(2deg)} }
+@keyframes float-in { from{opacity:0;transform:translateY(18px) scale(.98)} to{opacity:1;transform:translateY(0) scale(1)} }
+@keyframes message-in { from{opacity:0;transform:translateY(8px) scale(.98)} to{opacity:1;transform:translateY(0) scale(1)} }
+@keyframes menu-in { from{opacity:0;transform:translateY(-6px) scale(.96)} to{opacity:1;transform:translateY(0) scale(1)} }
+@keyframes typing-bounce { 0%,60%,100%{transform:translateY(0);opacity:.45} 30%{transform:translateY(-3px);opacity:1} }
+@keyframes spin { to{transform:rotate(360deg)} }
+
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; scroll-behavior:auto !important; }
+}
+
+
+/* ================================
+   MESSAGE ANIMATION
+================================ */
+
+.message-line {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+  animation: messageIn 0.28s ease forwards;
+}
+
+@keyframes messageIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+
+/* ================================
+   MESSAGE BUBBLE
+================================ */
+
+.message-bubble {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+
+/* ================================
+   MY MESSAGE
+================================ */
+
+.message-mine {
+  background: linear-gradient(
+    135deg,
+    #6366f1,
+    #4f46e5
+  );
+
+  color: white;
+
+  box-shadow:
+    0 8px 25px rgba(79, 70, 229, 0.18);
+}
+
+
+/* ================================
+   OTHER USER MESSAGE
+================================ */
+
+.message-other {
+  background: rgba(255, 255, 255, 0.92);
+
+  color: #334155;
+
+  border: 1px solid rgba(226, 232, 240, 0.9);
+
+  box-shadow:
+    0 5px 20px rgba(15, 23, 42, 0.06);
+}
+
+
+/* ================================
+   TYPING BUBBLE
+================================ */
+
+.typing-bubble {
+  min-width: 65px;
+  background: white;
+
+  border: 1px solid #e2e8f0;
+
+  box-shadow:
+    0 7px 22px rgba(15, 23, 42, 0.08);
+}
+
+
+/* ================================
+   TYPING DOT
+================================ */
+
+.typing-dot {
+  width: 6px;
+  height: 6px;
+
+  border-radius: 9999px;
+
+  background: #94a3b8;
+
+  animation: typingBounce 1.2s infinite ease-in-out;
+}
+
+
+/* Second dot delay */
+.typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+
+/* Third dot delay */
+.typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+
+@keyframes typingBounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+
+  30% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+
+/* ================================
+   TYPING CONTAINER ANIMATION
+================================ */
+
+.animate-message-in {
+  animation: typingMessageIn 0.25s ease-out;
+}
+
+@keyframes typingMessageIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+/* ================================
+   EMPTY STATE
+================================ */
+
+.animate-float-in {
+  animation:
+    floatIn 0.45s ease-out,
+    floating 3s ease-in-out 0.45s infinite;
+}
+
+@keyframes floatIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes floating {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+
+/* Advanced UI motion */
+.auth-page-enter { animation: auth-page-enter .65s cubic-bezier(.2,.8,.2,1) both; }
+.auth-panel-enter { animation: auth-panel-enter .7s cubic-bezier(.2,.8,.2,1) .08s both; }
+.auth-field-enter { animation: auth-field-enter .45s cubic-bezier(.2,.8,.2,1) both; }
+.network-banner { animation: network-drop .3s cubic-bezier(.2,.8,.2,1) both; }
+.status-pop { animation: status-pop .25s ease-out both; }
+@keyframes auth-page-enter { from{opacity:0;transform:scale(.985)} to{opacity:1;transform:scale(1)} }
+@keyframes auth-panel-enter { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+@keyframes auth-field-enter { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+@keyframes network-drop { from{opacity:0;transform:translateY(-100%)} to{opacity:1;transform:translateY(0)} }
+@keyframes status-pop { 0%{opacity:0;transform:scale(.65)} 70%{transform:scale(1.12)} 100%{opacity:1;transform:scale(1)} }
