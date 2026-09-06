@@ -1,4 +1,4 @@
-# ChatFlow Secure Backend
+# Scroller Secure Backend
 
 Express + MongoDB + Socket.IO backend with:
 - bcrypt password hashing

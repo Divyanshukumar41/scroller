@@ -16,43 +16,31 @@ import chatRoutes from "./routes/chat.js";
 import Conversation from "./models/Conversation.js";
 import Message from "./models/Message.js";
 import User from "./models/User.js";
-
+import { setServers } from "node:dns/promises";
 /* =========================================================
    APP
 ========================================================= */
 
 const app = express();
 
-app.set(
-  "trust proxy",
-  1
-);
+setServers(["1.1.1.1", "8.8.8.8"]);
+app.set("trust proxy", 1);
 
 /* =========================================================
    CORS
 ========================================================= */
 
-const allowedOrigins =
-  process.env.CLIENT_URL
-    ?.split(",")
-    .map((origin) =>
-      origin.trim()
-    )
-    .filter(Boolean) || [
-    "http://localhost:5173",
-  ];
+const allowedOrigins = process.env.CLIENT_URL?.split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean) || ["http://localhost:5173"];
 
-app.use(
-  helmet()
-);
+app.use(helmet());
 
 app.use(
   cors({
-    origin:
-      allowedOrigins,
-    credentials:
-      true,
-  })
+    origin: allowedOrigins,
+    credentials: true,
+  }),
 );
 
 /* =========================================================
@@ -62,7 +50,7 @@ app.use(
 app.use(
   express.json({
     limit: "100kb",
-  })
+  }),
 );
 
 /* =========================================================
@@ -71,469 +59,293 @@ app.use(
 
 app.use(
   rateLimit({
-    windowMs:
-      15 * 60 * 1000,
+    windowMs: 15 * 60 * 1000,
 
     max: 300,
 
-    standardHeaders:
-      true,
+    standardHeaders: true,
 
-    legacyHeaders:
-      false,
-  })
+    legacyHeaders: false,
+  }),
 );
 
 /* =========================================================
    HEALTH
 ========================================================= */
 
-app.get(
-  "/health",
-  (req, res) => {
-    res.json({
-      success: true,
-      status: "ok",
-    });
-  }
-);
+app.get("/health", (req, res) => {
+  res.json({
+    success: true,
+    status: "ok",
+  });
+});
 
 /* =========================================================
    ROUTES
 ========================================================= */
 
-app.use(
-  "/api/auth",
-  authRoutes
-);
+app.use("/api/auth", authRoutes);
 
-app.use(
-  "/api/users",
-  userRoutes
-);
+app.use("/api/users", userRoutes);
 
-app.use(
-  "/api",
-  chatRoutes
-);
+app.use("/api", chatRoutes);
 
 /* =========================================================
    HTTP SERVER
 ========================================================= */
 
-const server =
-  http.createServer(app);
+const server = http.createServer(app);
 
 /* =========================================================
    SOCKET.IO
 ========================================================= */
 
-const io = new Server(
-  server,
-  {
-    cors: {
-      origin:
-        allowedOrigins,
-      credentials:
-        true,
-    },
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+  },
 
-    transports: [
-      "websocket",
-      "polling",
-    ],
-  }
-);
+  transports: ["websocket", "polling"],
+});
 
 /* =========================================================
    SOCKET AUTH
 ========================================================= */
 
-io.use(
-  async (
-    socket,
-    next
-  ) => {
-    try {
-      const token =
-        socket.handshake
-          .auth?.token;
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token;
 
-      if (!token) {
-        throw new Error(
-          "Token missing"
-        );
-      }
-
-      const decoded =
-        jwt.verify(
-          token,
-          process.env
-            .JWT_SECRET
-        );
-
-      const user =
-        await User.findById(
-          decoded.sub
-        );
-
-      if (
-        !user ||
-        !user.is_verified
-      ) {
-        throw new Error(
-          "Unauthorized"
-        );
-      }
-
-      socket.userId =
-        String(user._id);
-
-      next();
-    } catch (error) {
-      console.error(
-        "Socket auth:",
-        error.message
-      );
-
-      next(
-        new Error(
-          "Unauthorized"
-        )
-      );
+    if (!token) {
+      throw new Error("Token missing");
     }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await User.findById(decoded.sub);
+
+    if (!user || !user.is_verified) {
+      throw new Error("Unauthorized");
+    }
+
+    socket.userId = String(user._id);
+
+    next();
+  } catch (error) {
+    console.error("Socket auth:", error.message);
+
+    next(new Error("Unauthorized"));
   }
-);
+});
 
 /* =========================================================
    SOCKET CONNECTION
 ========================================================= */
 
-io.on(
-  "connection",
-  async (socket) => {
-    const userId =
-      socket.userId;
+io.on("connection", async (socket) => {
+  const userId = socket.userId;
 
-    console.log(
-      `Socket connected: ${userId}`
-    );
+  console.log(`Socket connected: ${userId}`);
 
-    /* =====================================================
+  /* =====================================================
        SET ONLINE
     ===================================================== */
 
-    try {
-      await User.findByIdAndUpdate(
-        userId,
-        {
-          status: "online",
-          last_active:
-            new Date(),
-        }
-      );
+  try {
+    await User.findByIdAndUpdate(userId, {
+      status: "online",
+      last_active: new Date(),
+    });
 
-      socket.broadcast.emit(
-        "user:online",
-        {
-          userId,
-        }
-      );
-    } catch (error) {
-      console.error(
-        "Online update:",
-        error.message
-      );
-    }
+    socket.broadcast.emit("user:online", {
+      userId,
+    });
+  } catch (error) {
+    console.error("Online update:", error.message);
+  }
 
-    /* =====================================================
+  /* =====================================================
        JOIN CONVERSATION
     ===================================================== */
 
-    socket.on(
-      "conversation:join",
-      async ({
-        conversationId,
-      }) => {
-        try {
-          if (
-            !conversationId
-          ) {
-            return;
-          }
+  socket.on("conversation:join", async ({ conversationId }) => {
+    try {
+      if (!conversationId) {
+        return;
+      }
 
-          const conversation =
-            await Conversation.findOne(
-              {
-                _id:
-                  conversationId,
+      const conversation = await Conversation.findOne({
+        _id: conversationId,
 
-                participants:
-                  userId,
-              }
-            );
+        participants: userId,
+      });
 
-          if (
-            !conversation
-          ) {
-            return;
-          }
+      if (!conversation) {
+        return;
+      }
 
-          const room =
-            `conversation:${conversationId}`;
+      const room = `conversation:${conversationId}`;
 
-          socket.join(room);
+      socket.join(room);
 
-          /* ===============================================
+      /* ===============================================
              Mark unread messages read
           =============================================== */
 
-          const unread =
-            await Message.find(
-              {
-                conversation:
-                  conversationId,
+      const unread = await Message.find({
+        conversation: conversationId,
 
-                receiver:
-                  userId,
+        receiver: userId,
 
-                read: false,
-              }
-            ).select("_id");
+        read: false,
+      }).select("_id");
 
-          if (unread.length) {
-            const ids =
-              unread.map(
-                (message) =>
-                  message._id
-              );
+      if (unread.length) {
+        const ids = unread.map((message) => message._id);
 
-            await Message.updateMany(
-              {
-                _id: {
-                  $in: ids,
-                },
+        await Message.updateMany(
+          {
+            _id: {
+              $in: ids,
+            },
 
-                receiver:
-                  userId,
-              },
-              {
-                $set: {
-                  read: true,
-                  readAt:
-                    new Date(),
-                },
-              }
-            );
+            receiver: userId,
+          },
+          {
+            $set: {
+              read: true,
+              readAt: new Date(),
+            },
+          },
+        );
 
-            io.to(room).emit(
-              "message:read",
-              {
-                messageIds:
-                  ids.map(String),
-              }
-            );
-          }
-        } catch (error) {
-          console.error(
-            "conversation:join:",
-            error.message
-          );
-        }
+        io.to(room).emit("message:read", {
+          messageIds: ids.map(String),
+        });
       }
-    );
+    } catch (error) {
+      console.error("conversation:join:", error.message);
+    }
+  });
 
-    /* =====================================================
+  /* =====================================================
        TYPING START
     ===================================================== */
 
-    socket.on(
-      "typing:start",
-      ({
-        conversationId,
-      }) => {
-        if (
-          !conversationId
-        ) {
-          return;
-        }
+  socket.on("typing:start", ({ conversationId }) => {
+    if (!conversationId) {
+      return;
+    }
 
-        socket
-          .to(
-            `conversation:${conversationId}`
-          )
-          .emit(
-            "typing:start",
-            {
-              userId,
-            }
-          );
-      }
-    );
+    socket.to(`conversation:${conversationId}`).emit("typing:start", {
+      userId,
+    });
+  });
 
-    /* =====================================================
+  /* =====================================================
        TYPING STOP
     ===================================================== */
 
-    socket.on(
-      "typing:stop",
-      ({
-        conversationId,
-      }) => {
-        if (
-          !conversationId
-        ) {
-          return;
-        }
+  socket.on("typing:stop", ({ conversationId }) => {
+    if (!conversationId) {
+      return;
+    }
 
-        socket
-          .to(
-            `conversation:${conversationId}`
-          )
-          .emit(
-            "typing:stop",
-            {
-              userId,
-            }
-          );
-      }
-    );
+    socket.to(`conversation:${conversationId}`).emit("typing:stop", {
+      userId,
+    });
+  });
 
-    /* =====================================================
+  /* =====================================================
        SEND MESSAGE
     ===================================================== */
 
-    socket.on(
-      "message:send",
-      async (
-        {
-          conversationId,
-          receiverId,
-          text,
-          message_type = "text",
-          localId,
-        },
-        ack
-      ) => {
-        try {
-          /* =============================================
+  socket.on(
+    "message:send",
+    async (
+      { conversationId, receiverId, text, message_type = "text", localId },
+      ack,
+    ) => {
+      try {
+        /* =============================================
              Validate
           ============================================= */
 
-          if (
-            !conversationId ||
-            !receiverId
-          ) {
-            return ack?.({
-              success:
-                false,
+        if (!conversationId || !receiverId) {
+          return ack?.({
+            success: false,
 
-              message:
-                "Invalid conversation",
-              localId,
-            });
-          }
+            message: "Invalid conversation",
+            localId,
+          });
+        }
 
-          if (
-            typeof text !==
-              "string" ||
-            !text.trim() ||
-            text.length >
-              5000
-          ) {
-            return ack?.({
-              success:
-                false,
+        if (typeof text !== "string" || !text.trim() || text.length > 5000) {
+          return ack?.({
+            success: false,
 
-              message:
-                "Invalid message",
+            message: "Invalid message",
 
-              localId,
-            });
-          }
+            localId,
+          });
+        }
 
-          /* =============================================
+        /* =============================================
              Prevent self-message
           ============================================= */
 
-          if (
-            String(
-              userId
-            ) ===
-            String(
-              receiverId
-            )
-          ) {
-            return ack?.({
-              success:
-                false,
+        if (String(userId) === String(receiverId)) {
+          return ack?.({
+            success: false,
 
-              message:
-                "Cannot send message to yourself",
+            message: "Cannot send message to yourself",
 
-              localId,
-            });
-          }
+            localId,
+          });
+        }
 
-          /* =============================================
+        /* =============================================
              Check conversation
           ============================================= */
 
-          const conversation =
-            await Conversation.findOne(
-              {
-                _id:
-                  conversationId,
+        const conversation = await Conversation.findOne({
+          _id: conversationId,
 
-                participants: {
-                  $all: [
-                    userId,
-                    receiverId,
-                  ],
+          participants: {
+            $all: [userId, receiverId],
 
-                  $size: 2,
-                },
-              }
-            );
+            $size: 2,
+          },
+        });
 
-          if (
-            !conversation
-          ) {
-            return ack?.({
-              success:
-                false,
+        if (!conversation) {
+          return ack?.({
+            success: false,
 
-              message:
-                "Conversation not found",
+            message: "Conversation not found",
 
-              localId,
-            });
-          }
+            localId,
+          });
+        }
 
-          /* =============================================
+        /* =============================================
              Create message
           ============================================= */
 
-          const message =
-            await Message.create(
-              {
-                conversation:
-                  conversation._id,
+        const message = await Message.create({
+          conversation: conversation._id,
 
-                sender:
-                  userId,
+          sender: userId,
 
-                receiver:
-                  receiverId,
+          receiver: receiverId,
 
-                text:
-                  text.trim(),
+          text: text.trim(),
 
-                message_type,
-              }
-            );
+          message_type,
+        });
 
-          /* =============================================
+        /* =============================================
              IMPORTANT
 
              Send localId back with message:new.
@@ -541,237 +353,148 @@ io.on(
              This is what prevents duplicate messages.
           ============================================= */
 
-          const payload = {
-            ...message.toObject(),
+        const payload = {
+          ...message.toObject(),
 
-            localId:
-              localId || null,
-          };
+          localId: localId || null,
+        };
 
-          const room =
-            `conversation:${conversationId}`;
+        const room = `conversation:${conversationId}`;
 
-          io.to(room).emit(
-            "message:new",
-            payload
-          );
+        io.to(room).emit("message:new", payload);
 
-          /* =============================================
+        /* =============================================
              ACK
           ============================================= */
 
-          ack?.({
-            success:
-              true,
+        ack?.({
+          success: true,
 
-            messageId:
-              String(
-                message._id
-              ),
+          messageId: String(message._id),
 
-            localId:
-              localId || null,
-          });
-        } catch (error) {
-          console.error(
-            "message:send:",
-            error.message
-          );
+          localId: localId || null,
+        });
+      } catch (error) {
+        console.error("message:send:", error.message);
 
-          ack?.({
-            success:
-              false,
+        ack?.({
+          success: false,
 
-            message:
-              "Unable to send message",
+          message: "Unable to send message",
 
-            localId,
-          });
-        }
+          localId,
+        });
       }
-    );
+    },
+  );
 
-    /* =====================================================
+  /* =====================================================
        READ MESSAGE
     ===================================================== */
 
-    socket.on(
-      "message:read",
-      async ({
-        conversationId,
-      }) => {
-        try {
-          if (
-            !conversationId
-          ) {
-            return;
-          }
-
-          const conversation =
-            await Conversation.findOne(
-              {
-                _id:
-                  conversationId,
-
-                participants:
-                  userId,
-              }
-            );
-
-          if (
-            !conversation
-          ) {
-            return;
-          }
-
-          const unread =
-            await Message.find(
-              {
-                conversation:
-                  conversationId,
-
-                receiver:
-                  userId,
-
-                read: false,
-              }
-            ).select(
-              "_id sender"
-            );
-
-          if (!unread.length) {
-            return;
-          }
-
-          const ids =
-            unread.map(
-              (message) =>
-                message._id
-            );
-
-          await Message.updateMany(
-            {
-              _id: {
-                $in: ids,
-              },
-
-              receiver:
-                userId,
-            },
-            {
-              $set: {
-                read: true,
-                readAt:
-                  new Date(),
-              },
-            }
-          );
-
-          io.to(
-            `conversation:${conversationId}`
-          ).emit(
-            "message:read",
-            {
-              messageIds:
-                ids.map(String),
-            }
-          );
-        } catch (error) {
-          console.error(
-            "message:read:",
-            error.message
-          );
-        }
+  socket.on("message:read", async ({ conversationId }) => {
+    try {
+      if (!conversationId) {
+        return;
       }
-    );
 
-    /* =====================================================
+      const conversation = await Conversation.findOne({
+        _id: conversationId,
+
+        participants: userId,
+      });
+
+      if (!conversation) {
+        return;
+      }
+
+      const unread = await Message.find({
+        conversation: conversationId,
+
+        receiver: userId,
+
+        read: false,
+      }).select("_id sender");
+
+      if (!unread.length) {
+        return;
+      }
+
+      const ids = unread.map((message) => message._id);
+
+      await Message.updateMany(
+        {
+          _id: {
+            $in: ids,
+          },
+
+          receiver: userId,
+        },
+        {
+          $set: {
+            read: true,
+            readAt: new Date(),
+          },
+        },
+      );
+
+      io.to(`conversation:${conversationId}`).emit("message:read", {
+        messageIds: ids.map(String),
+      });
+    } catch (error) {
+      console.error("message:read:", error.message);
+    }
+  });
+
+  /* =====================================================
        DISCONNECT
     ===================================================== */
 
-    socket.on(
-      "disconnect",
-      async () => {
-        try {
-          await User.findByIdAndUpdate(
-            userId,
-            {
-              status:
-                "offline",
+  socket.on("disconnect", async () => {
+    try {
+      await User.findByIdAndUpdate(userId, {
+        status: "offline",
 
-              last_active:
-                new Date(),
-            }
-          );
+        last_active: new Date(),
+      });
 
-          socket.broadcast.emit(
-            "user:offline",
-            {
-              userId,
-            }
-          );
+      socket.broadcast.emit("user:offline", {
+        userId,
+      });
 
-          console.log(
-            `Socket disconnected: ${userId}`
-          );
-        } catch (error) {
-          console.error(
-            "disconnect:",
-            error.message
-          );
-        }
-      }
-    );
-  }
-);
+      console.log(`Socket disconnected: ${userId}`);
+    } catch (error) {
+      console.error("disconnect:", error.message);
+    }
+  });
+});
 
 /* =========================================================
    404
 ========================================================= */
 
-app.use(
-  (
-    req,
-    res
-  ) => {
-    res
-      .status(404)
-      .json({
-        success:
-          false,
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
 
-        message:
-          "Route not found",
-      });
-  }
-);
+    message: "Route not found",
+  });
+});
 
 /* =========================================================
    SERVER
 ========================================================= */
 
-const port =
-  Number(
-    process.env.PORT ||
-      8080
-  );
+const port = Number(process.env.PORT || 8080);
 
 connectDB()
   .then(() => {
-    server.listen(
-      port,
-      () => {
-        console.log(
-          `ChatFlow API listening on ${port}`
-        );
-      }
-    );
+    server.listen(port, () => {
+      console.log(`Scroller API listening on ${port}`);
+    });
   })
   .catch((error) => {
-    console.error(
-      "Database connection failed:",
-      error
-    );
+    console.error("Database connection failed:", error);
 
     process.exit(1);
   });
