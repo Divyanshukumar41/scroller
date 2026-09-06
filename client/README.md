@@ -1,18 +1,21 @@
 # Scroller Frontend
 
-Responsive React + Tailwind CSS chat UI with:
-- Mobile-first chat layout
-- Real-time Socket.IO messaging
-- Login/signup + OTP verification screens
-- Searchable contacts
-- Responsive desktop/mobile navigation
+React + Vite + Tailwind chat frontend.
 
-## Run
+## Production on Vercel
+
+Set these Vercel environment variables:
+
+```env
+VITE_API_URL=https://YOUR-BACKEND.vercel.app/api
+VITE_SOCKET_URL=https://YOUR-BACKEND.vercel.app
+```
+
+The production chat uses REST APIs + polling, so it works when the backend is deployed as a Vercel Function and no Node server is running locally. Socket.IO remains available for local/non-serverless deployments.
+
+## Local
 
 ```bash
 npm install
-cp .env.example .env
 npm run dev
 ```
-
-Set `VITE_API_URL` and `VITE_SOCKET_URL` to your backend.

@@ -1,43 +1,35 @@
-# Scroller Secure Backend
+# Scroller Backend
 
-Express + MongoDB + Socket.IO backend with:
-- bcrypt password hashing
-- email OTP for signup verification
-- OTP on every login (2-step authentication)
-- OTP hashes stored instead of plaintext codes
-- 10-minute OTP expiry + 5 verification attempts
-- OTP resend rate limiting
-- Helmet, CORS and API rate limiting
-- JWT authentication for REST and Socket.IO
-- private conversation authorization
-- real-time messages and typing indicators
+Express + MongoDB + JWT + OTP backend.
 
-## Setup
+## Vercel
+
+The `api/[...path].js` function exposes the REST API without running `node src/server.js` yourself.
+
+Required Vercel environment variables:
+
+```env
+NODE_ENV=production
+MONGO_URI=...
+JWT_SECRET=...
+JWT_EXPIRES_IN=1d
+CLIENT_URL=https://YOUR-FRONTEND.vercel.app
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=...
+SMTP_PASS=...
+MAIL_FROM=...
+```
+
+Cloudinary variables are included in `.env.example` for future media features.
+
+## Important
+
+Vercel Functions are request-based, so Socket.IO cannot be relied on as a persistent production transport. The frontend therefore sends messages through REST and polls messages every 2.5 seconds. The original Socket.IO server is still kept for local/non-serverless deployments.
+
+## Local
 
 ```bash
 npm install
-cp .env.example .env
-```
-
-Fill `MONGO_URI`, `JWT_SECRET`, `CLIENT_URL`, and SMTP settings.
-
-For development, if SMTP is empty, the OTP is printed in the backend terminal. In production, configure SMTP; the server refuses to silently expose OTPs there.
-
-Run:
-
-```bash
 npm run dev
 ```
-
-Frontend expects:
-- POST `/api/auth/signup`
-- POST `/api/auth/signup/verify-otp`
-- POST `/api/auth/login`
-- POST `/api/auth/login/verify-otp`
-- POST `/api/auth/otp/resend`
-- GET `/api/users`
-- POST `/api/conversations`
-- GET `/api/messages/:conversationId`
-
-Socket events:
-`conversation:join`, `message:send`, `message:new`, `typing:start`, `typing:stop`, `user:online`, `user:offline`.

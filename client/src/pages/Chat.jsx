@@ -125,7 +125,7 @@ export default function Chat() {
     useState(false);
 
   const [connected, setConnected] =
-    useState(socket.connected);
+    useState(true);
 
   /* =======================================================
      REFS
@@ -301,553 +301,105 @@ export default function Chat() {
   }, []);
 
   /* =======================================================
-     SOCKET EVENTS
+     OPTIONAL SOCKET STATUS
+     REST remains the production transport.
   ======================================================= */
 
   useEffect(() => {
-    const onConnect = () => {
-      setConnected(true);
-
-      /*
-        Retry offline messages
-      */
-      const pending =
-        messagesRef.current.filter(
-          (message) =>
-            message?.status ===
-              "pending" &&
-            message?._localId
-        );
-
-      pending.forEach((message) => {
-        socket.emit(
-          "message:send",
-          {
-            conversationId:
-              idOf(
-                message.conversation
-              ),
-
-            receiverId:
-              idOf(
-                message.receiver
-              ),
-
-            text: message.text,
-
-            message_type:
-              message.message_type ||
-              "text",
-
-            localId:
-              message._localId,
-          },
-          (result) => {
-            setMessages((prev) =>
-              prev.map((item) => {
-                if (
-                  item?._localId !==
-                  message._localId
-                ) {
-                  return item;
-                }
-
-                if (
-                  !result?.success
-                ) {
-                  return {
-                    ...item,
-                    status:
-                      "pending",
-                  };
-                }
-
-                return {
-                  ...item,
-                  status:
-                    "sending",
-                };
-              })
-            );
-          }
-        );
-      });
-    };
-
-    const onDisconnect = () => {
-      setConnected(false);
-      setSending(false);
-      setTyping(false);
-    };
-
-    const onConnectError = (
-      error
-    ) => {
-      console.error(
-        "Socket connection error:",
-        error?.message
+    const onConnect = () => setConnected(true);
+    const onDisconnect = () => setConnected(true);
+    const onConnectError = (error) => {
+      console.warn(
+        "Socket.IO unavailable; using REST polling:",
+        error?.message || error
       );
-
-      setConnected(false);
+      setConnected(true);
     };
 
-    /* =====================================================
-       PRESENCE
-    ===================================================== */
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("connect_error", onConnectError);
 
-    const onUserOnline = ({
-      userId,
-    }) => {
-      setOnline((prev) => ({
-        ...prev,
-        [String(userId)]: true,
-      }));
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("connect_error", onConnectError);
     };
+  }, []);
 
-    const onUserOffline = ({
-      userId,
-    }) => {
-      setOnline((prev) => ({
-        ...prev,
-        [String(userId)]: false,
-      }));
-    };
+  /* =======================================================
+     VERCEL / SERVERLESS MESSAGE POLLING
+     Socket.IO is optional; REST polling keeps production
+     chat working even when the backend is a Vercel Function.
+  ======================================================= */
 
-    /* =====================================================
-       NEW MESSAGE
-    ===================================================== */
+  useEffect(() => {
+    if (!conversation?._id) return;
 
-    const onNewMessage = (
-      message
-    ) => {
-      if (!message) return;
+    let active = true;
 
-      const incomingConversationId =
-        idOf(
-          message?.conversation
+    const syncMessages = async () => {
+      try {
+        const { data } = await api.get(
+          `/messages/${conversation._id}`
         );
 
-      const currentConversationId =
-        idOf(
-          conversationRef.current
-        );
+        if (!active) return;
 
-      /*
-        Only current open chat
-      */
-      if (
-        !currentConversationId ||
-        incomingConversationId !==
-          currentConversationId
-      ) {
-        return;
-      }
+        const serverMessages =
+          (data?.messages || []).map((message) => ({
+            ...message,
+            status: message?.read ? "read" : "sent",
+          }));
 
-      const incomingMessageId =
-        idOf(message);
+        setMessages((prev) => {
+          const pending = prev.filter(
+            (message) => message?._localId
+          );
 
-      const incomingLocalId =
-        message?.localId ??
-        message?._localId ??
-        null;
+          const seen = new Set();
+          const merged = [];
 
-      const incomingSenderId =
-        idOf(
-          message?.sender ??
-            message?.senderId ??
-            message?.sender_id ??
-            message?.userId ??
-            message?.user_id
-        );
+          [...serverMessages, ...pending].forEach(
+            (message) => {
+              const id = idOf(message);
 
-      const incomingReceiverId =
-        idOf(
-          message?.receiver ??
-            message?.receiverId ??
-            message?.receiver_id
-        );
-
-      setMessages((prev) => {
-        /*
-        ====================================================
-        1. EXACT localId MATCH
-
-        This is the primary duplicate fix.
-        ====================================================
-        */
-
-        if (incomingLocalId) {
-          const localIndex =
-            prev.findIndex(
-              (item) =>
-                item?._localId ===
-                incomingLocalId
-            );
-
-          if (localIndex !== -1) {
-            const next = [
-              ...prev,
-            ];
-
-            next[localIndex] = {
-              ...message,
-              _localId:
-                undefined,
-              localId:
-                undefined,
-              status:
-                message?.read
-                  ? "read"
-                  : "sent",
-            };
-
-            return next;
-          }
-        }
-
-        /*
-        ====================================================
-        2. Fallback temporary match
-
-        For backend versions that don't return localId.
-        ====================================================
-        */
-
-        const temporaryIndex =
-          prev.findIndex(
-            (item) => {
               if (
-                !item?._localId
+                id &&
+                !String(id).startsWith("local-") &&
+                seen.has(id)
               ) {
-                return false;
+                return;
               }
 
-              const itemSenderId =
-                idOf(
-                  item?.sender ??
-                    item?.senderId ??
-                    item?.sender_id
-                );
-
-              const itemReceiverId =
-                idOf(
-                  item?.receiver ??
-                    item?.receiverId ??
-                    item?.receiver_id
-                );
-
-              return (
-                itemSenderId ===
-                  incomingSenderId &&
-                itemReceiverId ===
-                  incomingReceiverId &&
-                item?.text ===
-                  message?.text &&
-                (
-                  item?.status ===
-                    "sending" ||
-                  item?.status ===
-                    "pending"
-                )
-              );
+              if (id) seen.add(id);
+              merged.push(message);
             }
           );
 
-        if (
-          temporaryIndex !== -1
-        ) {
-          const next = [
-            ...prev,
-          ];
-
-          next[
-            temporaryIndex
-          ] = {
-            ...message,
-            _localId:
-              undefined,
-            localId:
-              undefined,
-            status:
-              message?.read
-                ? "read"
-                : "sent",
-          };
-
-          return next;
-        }
-
-        /*
-        ====================================================
-        3. Server _id duplicate
-        ====================================================
-        */
-
-        if (
-          incomingMessageId &&
-          prev.some(
-            (item) =>
-              idOf(item) ===
-              incomingMessageId
-          )
-        ) {
-          return prev;
-        }
-
-        /*
-        ====================================================
-        4. VERY IMPORTANT
-
-        Server echo of OUR OWN message must never
-        become a second incoming message.
-
-        This prevents:
-
-             hi              <- duplicate LEFT
-                                  hi -> RIGHT
-        ====================================================
-        */
-
-        if (
-          incomingSenderId ===
-          currentUserId
-        ) {
-          return prev;
-        }
-
-        /*
-        ====================================================
-        5. Actual receiver message
-
-        Other user's message = LEFT
-        ====================================================
-        */
-
-        return [
-          ...prev,
-          {
-            ...message,
-            status:
-              message?.read
-                ? "read"
-                : "sent",
-          },
-        ];
-      });
-
-      /*
-      ======================================================
-      Mark incoming message read
-      ======================================================
-      */
-
-      if (
-        incomingSenderId ===
-          idOf(
-            selectedRef.current
-          ) &&
-        incomingReceiverId ===
-          currentUserId
-      ) {
-        socket.emit(
-          "message:read",
-          {
-            conversationId:
-              incomingConversationId,
-          }
+          return merged.sort(
+            (a, b) =>
+              new Date(a?.createdAt || 0).getTime() -
+              new Date(b?.createdAt || 0).getTime()
+          );
+        });
+      } catch (error) {
+        console.error(
+          "Message sync error:",
+          error?.response?.data?.message || error?.message
         );
       }
     };
 
-    /* =====================================================
-       READ RECEIPTS
-    ===================================================== */
+    syncMessages();
 
-    const onMessageRead = ({
-      messageIds = [],
-    }) => {
-      const ids = new Set(
-        messageIds.map(String)
-      );
-
-      setMessages((prev) =>
-        prev.map((message) =>
-          ids.has(
-            idOf(message)
-          )
-            ? {
-                ...message,
-                read: true,
-                status: "read",
-              }
-            : message
-        )
-      );
-    };
-
-    /* =====================================================
-       MESSAGE FAILED
-    ===================================================== */
-
-    const onMessageFailed = ({
-      localId,
-    }) => {
-      setMessages((prev) =>
-        prev.map((message) =>
-          message?._localId ===
-          localId
-            ? {
-                ...message,
-                status:
-                  "pending",
-              }
-            : message
-        )
-      );
-
-      setSending(false);
-    };
-
-    /* =====================================================
-       TYPING
-    ===================================================== */
-
-    const onTypingStart = ({
-      userId,
-    }) => {
-      if (
-        idOf(
-          selectedRef.current
-        ) === String(userId)
-      ) {
-        setTyping(true);
-      }
-    };
-
-    const onTypingStop = ({
-      userId,
-    }) => {
-      if (
-        idOf(
-          selectedRef.current
-        ) === String(userId)
-      ) {
-        setTyping(false);
-      }
-    };
-
-    /* =====================================================
-       REGISTER EVENTS
-    ===================================================== */
-
-    socket.on(
-      "connect",
-      onConnect
-    );
-
-    socket.on(
-      "disconnect",
-      onDisconnect
-    );
-
-    socket.on(
-      "connect_error",
-      onConnectError
-    );
-
-    socket.on(
-      "user:online",
-      onUserOnline
-    );
-
-    socket.on(
-      "user:offline",
-      onUserOffline
-    );
-
-    socket.on(
-      "message:new",
-      onNewMessage
-    );
-
-    socket.on(
-      "message:read",
-      onMessageRead
-    );
-
-    socket.on(
-      "message:failed",
-      onMessageFailed
-    );
-
-    socket.on(
-      "typing:start",
-      onTypingStart
-    );
-
-    socket.on(
-      "typing:stop",
-      onTypingStop
-    );
-
-    /* =====================================================
-       CLEANUP
-    ===================================================== */
+    const timer = setInterval(syncMessages, 2500);
 
     return () => {
-      socket.off(
-        "connect",
-        onConnect
-      );
-
-      socket.off(
-        "disconnect",
-        onDisconnect
-      );
-
-      socket.off(
-        "connect_error",
-        onConnectError
-      );
-
-      socket.off(
-        "user:online",
-        onUserOnline
-      );
-
-      socket.off(
-        "user:offline",
-        onUserOffline
-      );
-
-      socket.off(
-        "message:new",
-        onNewMessage
-      );
-
-      socket.off(
-        "message:read",
-        onMessageRead
-      );
-
-      socket.off(
-        "message:failed",
-        onMessageFailed
-      );
-
-      socket.off(
-        "typing:start",
-        onTypingStart
-      );
-
-      socket.off(
-        "typing:stop",
-        onTypingStop
-      );
+      active = false;
+      clearInterval(timer);
     };
-  }, [
-    currentUserId,
-  ]);
+  }, [conversation?._id]);
 
   /* =======================================================
      AUTO SCROLL
@@ -883,17 +435,24 @@ export default function Chat() {
 
   const markConversationRead =
     useCallback(
-      (conversationId) => {
-        if (
-          socket.connected &&
-          conversationId
-        ) {
-          socket.emit(
-            "message:read",
-            {
-              conversationId,
-            }
+      async (conversationId) => {
+        if (!conversationId) return;
+
+        try {
+          await api.post(
+            `/messages/${conversationId}/read`
           );
+        } catch (error) {
+          console.error(
+            "Failed to mark messages read:",
+            error
+          );
+        }
+
+        if (socket.connected) {
+          socket.emit("message:read", {
+            conversationId,
+          });
         }
       },
       []
@@ -1145,13 +704,10 @@ export default function Chat() {
      SEND MESSAGE
   ======================================================= */
 
-  const sendMessage = (
-    event
-  ) => {
+  const sendMessage = async (event) => {
     event.preventDefault();
 
-    const value =
-      text.trim();
+    const value = text.trim();
 
     if (
       !value ||
@@ -1167,159 +723,75 @@ export default function Chat() {
         .toString(36)
         .slice(2)}`;
 
-    /*
-      IMPORTANT:
-      sender = logged-in user
-      therefore isMine = true
-      therefore RIGHT
-    */
-    const senderId =
-      currentUserId;
-
-    /*
-    ======================================================
-    OFFLINE MESSAGE
-    ======================================================
-    */
-
-    if (!socket.connected) {
-      const offlineMessage = {
-        _id: localId,
-        _localId: localId,
-
-        conversation:
-          conversation._id,
-
-        sender:
-          senderId,
-
-        receiver:
-          selected._id,
-
-        text: value,
-
-        createdAt:
-          new Date().toISOString(),
-
-        status: "pending",
-
-        message_type:
-          "text",
-      };
-
-      setMessages((prev) => [
-        ...prev,
-        offlineMessage,
-      ]);
-
-      setText("");
-
-      return;
-    }
-
-    /*
-    ======================================================
-    OPTIMISTIC MESSAGE
-    ======================================================
-    */
-
     const optimisticMessage = {
       _id: localId,
       _localId: localId,
-
-      conversation:
-        conversation._id,
-
-      sender:
-        senderId,
-
-      receiver:
-        selected._id,
-
+      conversation: conversation._id,
+      sender: currentUserId,
+      receiver: selected._id,
       text: value,
-
-      createdAt:
-        new Date().toISOString(),
-
+      createdAt: new Date().toISOString(),
       status: "sending",
-
-      message_type:
-        "text",
+      message_type: "text",
     };
 
     setSending(true);
-
-    setMessages((prev) => [
-      ...prev,
-      optimisticMessage,
-    ]);
-
-    /*
-    ======================================================
-    SEND TO SOCKET
-    ======================================================
-    */
-
-    socket.emit(
-      "message:send",
-      {
-        conversationId:
-          conversation._id,
-
-        receiverId:
-          selected._id,
-
-        text: value,
-
-        message_type:
-          "text",
-
-        /*
-          Backend must return this same localId
-          through message:new
-        */
-        localId,
-      },
-      (result) => {
-        setSending(false);
-
-        /*
-          Message failed
-        */
-        if (
-          !result?.success
-        ) {
-          setMessages((prev) =>
-            prev.map((message) =>
-              message?._localId ===
-              localId
-                ? {
-                    ...message,
-                    status:
-                      "pending",
-                  }
-                : message
-            )
-          );
-        }
-      }
-    );
-
+    setMessages((prev) => [...prev, optimisticMessage]);
     setText("");
-    setTyping(false);
 
-    socket.emit(
-      "typing:stop",
-      {
-        conversationId:
-          conversation._id,
+    try {
+      /*
+        REST is the primary transport so the same app works on
+        Vercel Functions without a permanently running backend.
+      */
+      const { data } = await api.post("/messages", {
+        conversationId: conversation._id,
+        receiverId: selected._id,
+        text: value,
+        message_type: "text",
+      });
+
+      const saved = data?.message;
+
+      if (!data?.success || !saved?._id) {
+        throw new Error(
+          data?.message || "Unable to send message"
+        );
       }
-    );
 
-    if (typingTimer.current) {
-      clearTimeout(
-        typingTimer.current
+      setMessages((prev) =>
+        prev.map((message) =>
+          message?._localId === localId
+            ? {
+                ...saved,
+                status: saved.read ? "read" : "sent",
+              }
+            : message
+        )
       );
+
+      /*
+        If Socket.IO is available locally, keep it only for
+        real-time delivery. The REST message above is already
+        persisted, so we do not emit message:send here.
+      */
+    } catch (error) {
+      console.error("Send message error:", error);
+
+      setMessages((prev) =>
+        prev.map((message) =>
+          message?._localId === localId
+            ? { ...message, status: "pending" }
+            : message
+        )
+      );
+
+      window.alert(
+        error?.response?.data?.message ||
+          "Message could not be sent. Please try again."
+      );
+    } finally {
+      setSending(false);
     }
   };
 

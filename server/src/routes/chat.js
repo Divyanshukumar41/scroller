@@ -317,4 +317,126 @@ router.delete(
   }
 );
 
+
+/* =========================================================
+   SERVERLESS-FRIENDLY SEND MESSAGE
+   Used by Vercel because persistent Socket.IO connections
+   are not available in Vercel Functions.
+========================================================= */
+
+router.post(
+  "/messages",
+  protect,
+  async (req, res, next) => {
+    try {
+      const { conversationId, receiverId, text, message_type = "text" } = req.body || {};
+
+      if (!conversationId || !receiverId || typeof text !== "string" || !text.trim() || text.length > 5000) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid message",
+        });
+      }
+
+      if (String(req.user._id) === String(receiverId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Cannot send message to yourself",
+        });
+      }
+
+      if (!mongoose.isValidObjectId(conversationId) || !mongoose.isValidObjectId(receiverId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid conversation or receiver",
+        });
+      }
+
+      const conversation = await Conversation.findOne({
+        _id: conversationId,
+        participants: { $all: [req.user._id, receiverId], $size: 2 },
+      });
+
+      if (!conversation) {
+        return res.status(404).json({
+          success: false,
+          message: "Conversation not found",
+        });
+      }
+
+      const message = await Message.create({
+        conversation: conversation._id,
+        sender: req.user._id,
+        receiver: receiverId,
+        text: text.trim(),
+        message_type: ["text", "image"].includes(message_type) ? message_type : "text",
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: {
+          ...message.toObject(),
+          status: "sent",
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/* =========================================================
+   SERVERLESS-FRIENDLY MARK READ
+========================================================= */
+
+router.post(
+  "/messages/:conversationId/read",
+  protect,
+  async (req, res, next) => {
+    try {
+      const { conversationId } = req.params;
+
+      if (!mongoose.isValidObjectId(conversationId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid conversation",
+        });
+      }
+
+      const conversation = await Conversation.findOne({
+        _id: conversationId,
+        participants: req.user._id,
+      });
+
+      if (!conversation) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied",
+        });
+      }
+
+      const result = await Message.updateMany(
+        {
+          conversation: conversationId,
+          receiver: req.user._id,
+          read: false,
+        },
+        {
+          $set: {
+            read: true,
+            readAt: new Date(),
+          },
+        },
+      );
+
+      return res.json({
+        success: true,
+        modifiedCount: result.modifiedCount,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 export default router;

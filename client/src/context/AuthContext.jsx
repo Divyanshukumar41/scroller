@@ -45,6 +45,8 @@ export default function AuthProvider({ children }) {
   }, []);
 
   const connectSocket = (token) => {
+    if (import.meta.env.VITE_ENABLE_SOCKET !== "true") return;
+
     socket.auth = { token };
     if (!socket.connected) socket.connect();
   };
