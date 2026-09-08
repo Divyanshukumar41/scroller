@@ -2,7 +2,7 @@ import axios from "axios";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "https://scrollerbackend.vercel.app/api";
+  "https://scroller-f9k6.onrender.com/api/";
 
 export { API_URL };
 
